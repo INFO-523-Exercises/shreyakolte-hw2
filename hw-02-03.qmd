@@ -1,0 +1,216 @@
+---
+title: "Correlating like a data master"
+author: "shreyakolte"
+format: html
+editor: visual
+---
+
+# **Correlating Like a Data Master:**
+
+### **Required setup:**
+
+We first need to prepare our environment with the necessary packages.
+
+```{r}
+if (!require(pacman))
+  install.packages("pacman")
+
+pacman::p_load(colorblindr,
+       dlookr,
+       formattable,
+       GGally,
+       ggdist,
+       ggpubr,
+       ggridges,
+       here,
+       tidyverse)
+
+# Set global ggplot() theme
+# Theme pub_clean() from the ggpubr package with base text size = 16
+theme_set(theme_pubclean(base_size = 12)) 
+# All axes titles to their respective far right sides
+theme_update(axis.title = element_text(hjust = 1))
+# Remove axes ticks
+theme_update(axis.ticks = element_blank()) 
+# Remove legend key
+theme_update(legend.key = element_blank())
+```
+
+```{r}
+# Let's load a data set from the diabetes data set
+demographics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-09-05/demographics.csv')
+demographics
+
+
+# What does the data look like?
+demographics |>
+  head() |>
+  formattable()
+```
+
+### DIAGNOSE YOUR DATA:
+
+```{r}
+# What are the properties of the data
+demographics |>
+  diagnose() |>
+  formattable()
+```
+
+## **Describe and Visualize Correlations:**
+
+Correlations are a statistical relationship between two numerical variables, may or may not be causal. Exploring correlations in your data allows you determine data independence, a major assumption of parametric statistics, which means your variables are both randomly collected.
+
+```{r}
+# Table of correlations between numerical variables (we are sticking to the default Pearson's r coefficient)
+correlate(demographics) |>
+  formattable()
+```
+
+```{r}
+# Correlation matrix of numerical variables
+demographics |>
+plot_correlate()
+```
+
+## **Visualize Correlations within Groups:**
+
+If we have groups that we will compare later on, it is a good idea to see how each numerical variable correlates within these groups.
+
+```{r}
+demographics |>
+  group_by(facet) |>
+  plot_correlate()
+```
+
+```{r}
+demographicsAlt <- demographics
+demographicsAlt <- top_n(demographics,600,facet)
+demographicsAlt |> 
+  dplyr::select(facet,members) |>
+  ggpairs( aes(color =facet, alpha = 0.5)) +
+  theme(strip.background = element_blank())  # I don't like facet strip backgrounds
+```
+
+## **Describe and Visualize Correlations:**
+
+```{r}
+# Table of correlations between numerical variables (we are sticking to the default Pearson's r coefficient)
+correlate(demographics) |>
+  formattable()
+```
+
+```{r}
+# Correlation matrix of numerical variables
+demographics |>
+plot_correlate()
+```
+
+## **Visualize Correlations within Groups:**
+
+If we have groups that we will compare later on, it is a good idea to see how each numerical variable correlates within these groups.
+
+```{r}
+demographics |>
+  group_by(facet) |>
+  plot_correlate()
+```
+
+```{r}
+filtered_df <- subset(demographics, facet == "all wage and salary workers",facet = "construction", facet = "manufacturing", facet ="wholesale/retail", facet = "transportation, communication, and utilities"  )
+filtered_df
+```
+
+```{r}
+
+filtered_df |> 
+  dplyr::select(facet, members, employment) |>
+  ggpairs(aes(color = facet, alpha = 0.5)) +
+  theme(strip.background = element_blank())  # I don't like facet strip backgrounds...
+ # scale_fill_OkabeIto() +
+  #scale_color_OkabeIto()
+```
+
+## **Describe and Visualize Relationships Based on Target Variables:**
+
+`Target variables` are essentially numerical or categorical variables that you want to relate others to in a data frame. `dlookr` does this through the `target_by()` function, which is similar to `group_by()` in `dplyr`. The `relate()` function then briefly analyzes the relationship between the target variable and the variables of interest.
+
+### **Numerical Target Variables: Numerical Variable of Interest:**
+
+```{r}
+# First, we need to remove NAs, they cause an error
+demographics.noNA <- demographics |> 
+  drop_na()
+
+# The numerical predictor variable that we want
+num <- target_by(demographics.noNA,covered)
+
+# Relating the variable of interest to the numerical target variable
+num_num <- relate(num, members)
+
+# Summary of the regression analysis - the same as the summary from lm(Formula)
+summary(num_num)
+```
+
+```{r}
+# Plotting the linear relationship
+plot(num_num)
+```
+
+### **Numerical Target Variables: Categorical Variable of Interest:**
+
+Formula: `Group (categorical) ~ pLWP (numerical)`
+
+```{r}
+# The categorical predictor variable that we want
+num <- target_by(demographics, year) 
+
+# We need to change Group to a factor
+num$facet <- as.factor(num$facet)
+
+# Relating the variable of interest to the numerical target variable
+num_cat <- relate(num, facet)
+
+# Summary of the ANOVA analysis - the same as the summary from anova(lm(Formula))
+summary(num_cat)
+```
+
+```{r warning=FALSE}
+plot(num_cat) +
+  theme(axis.text = element_blank())
+```
+
+### **Categorical Target Variables: Numeri Variable of Interest:**
+
+```{r}
+# Create new categorical column
+cat_dataset <- demographics |>
+  select(members, facet) |>
+  drop_na() |>
+  mutate(covered = ifelse(
+    members > (mean(members + sd(members))), 
+                          "Yes", 
+                          "No"))
+
+# New dataset 
+cat_dataset |>
+  head() |>
+  formattable()
+```
+
+Formula = `HighLWP (categorical) ~ Group (categorical response)`
+
+```{r}
+# The categorical predictor variable that we want
+categ <- target_by(cat_dataset, covered)
+
+# Relating the variable of interest to the categorical target variable
+cat_cat <- relate(categ, facet)
+
+# Summary of the Chi-square test for Independence
+summary(cat_cat)
+```
+
+```{r}
+plot(cat_cat)
+```

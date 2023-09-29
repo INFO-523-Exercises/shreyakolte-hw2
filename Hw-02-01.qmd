@@ -1,0 +1,195 @@
+---
+title: "hw-02-01"
+author: "shreyakolte"
+format: html
+editor: visual
+---
+
+# [**TRANSFORMING LIKE A DATA TRANSFORMER:**]{.underline}
+
+### **INSTALLING THE PACKAGE REQUIRED FOR OUR DATA SET:**
+
+We will first prepare our environment with the necessary packages i.e. we will install tinytuesday package in which we will find the dataset we are supposed to use for doing all our operations.
+
+### **REQUIRED SETUP:**
+
+Installing all the required packages for doing our operations on the dataset.
+
+```{r}
+# Sets the number of significant figures to two - e.g., 0.01
+options(digits = 2)
+
+# Required package for quick package downloading and loading 
+if (!require(pacman))  
+  install.packages("pacman")
+```
+
+```{r}
+# Downloads and load required packages
+pacman::p_load(dlookr, # Exploratory data analysis
+               forecast, # Needed for Box-Cox transformations
+               formattable, # HTML tables from R outputs
+               here, # Standardizes paths to data
+               kableExtra, # Alternative to formattable
+               knitr, # Needed to write HTML reports
+               missRanger, # To generate NAs
+               tidyverse) # Powerful data wrangling package suite
+```
+
+### **LOADING AND DOWNLOADING THE DATA SET:**
+
+Here, we are loading the data, examining columns and datatypes, examining the data normality and describing the properties our our data as well.
+
+```{r}
+# Let's load a data set from the data set
+dataset <- read.csv("timezones.csv") 
+dataset
+```
+
+```{r}
+# What does the data look like?
+dataset |>
+  head() |>
+  formattable()
+```
+
+```{r}
+  dataset |>
+    select(latitude,longitude) |>
+  describe() |>
+  select(described_variables, skewness) |>
+  formattable()
+```
+
+### **DATA NORMALITY:**
+
+```{r}
+dataset |>
+plot_normality(latitude,longitude)
+```
+
+## **Normality within Groups:**
+
+Normal distributions (bell curves) are a common data assumptions for many hypothesis testing statistics,, in particular parametric statistics. Deviations from normality can either strongly skew the results or reduce the power to detect a significant statistical difference.
+
+Here are the distribution properties to know and consider:
+
+The mean, median, and mode are the same value, Distribution symmetry at the mean and Normal distributions can be described by the mean and standard deviation.
+
+```{r}
+dataset %>%
+  group_by() %>%
+  select(latitude,longitude) %>%
+  plot_normality()
+```
+
+### **Testing Normality:**
+
+#### **Q-Q Plots**
+
+Plots of the quartiles of a target data set against the predicted quartiles from a normal distribution.
+
+```{r}
+dataset |>
+plot_normality(latitude, longitude, zone)
+```
+
+### **Normality within Groups:**
+
+```{r}
+dataset %>%
+  group_by() %>%
+  select(latitude,longitude) %>%
+  plot_normality()
+```
+
+### **TRANSFORMING DATA:**
+
+Your data could be more easily interpreted with a transformation, since not all relationships in nature follow a linear relationship - i.e., many biological phenomena follow a power law (or logarithmic curve), where they do not scale linearly.
+
+```{r}
+InsMod <- dataset |>
+  filter(latitude > 0)
+```
+
+### **Square-root, Cube-root, and Logarithmic Transformations:**
+
+We will compare the `sqrt`, `log+1`, `1/x` (inverse), `x^2`, and `x^3` transformations. Note that you would have to add a constant to use the `log` transformation, so it is easier to use the `log+1` instead. You however need to add a constant to both the `sqrt` and `1/x` transformations because they don\'t include zeros and will otherwise skew the results.
+
+```{r}
+sqrtIns <- transform(InsMod$latitude, method = "sqrt") 
+
+summary(sqrtIns)
+```
+
+```{r}
+sqrtIns |>
+  plot()
+```
+
+### **Logarithmic (+1) Transformation:**
+
+```{r}
+Log1Ins <- transform(InsMod$latitude, method = "log+1") 
+
+summary(Log1Ins)
+```
+
+```{r}
+Log1Ins |>
+  plot()
+```
+
+### **Inverse Transformation:**
+
+```{r}
+InvIns <- transform(InsMod$longitude, method = "1/x") 
+
+summary(InvIns)
+```
+
+```{r}
+InvIns |>
+  plot()
+```
+
+### **Squared Transformation:**
+
+```{r}
+SqrdIns <- transform(InsMod$latitude, method = "x^2") 
+
+summary(SqrdIns)
+```
+
+```{r}
+SqrdIns |>
+  plot()
+```
+
+### **Cubed Transformation:**
+
+```{r}
+CubeIns <- transform(InsMod$latitude, method = "x^3") 
+
+summary(CubeIns)
+```
+
+```{r}
+CubeIns |>
+  plot()
+```
+
+### **Box-cox Transformation:**
+
+There are several transformations, each with it\'s own \"criteria\", and they don\'t always fix extremely skewed data. Instead, you can just choose the Box-Cox Transformation which searches for the the best lambda value that maximizes the log-likelihood (basically, what power transformation is best). The benefit is that you should have normally distributed data after, but the power relationship might be pretty abstract 
+
+```{r}
+BoxCoxIns <- transform(InsMod$latitude, method = "Box-Cox") 
+
+summary(BoxCoxIns)
+```
+
+```{r}
+BoxCoxIns |>
+  plot()
+```

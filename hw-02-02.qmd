@@ -1,0 +1,326 @@
+---
+title: "hw2-02"
+author: "shreyakolte"
+format: html
+editor: visual
+---
+
+# IMPUTING LIKE A DATA SCIENTIST:
+
+### Required Setup:
+
+First we will install all the packages required for our operations on our dataset.
+
+```{r}
+# Sets the number of significant figures to two - e.g., 0.01
+options(digits = 2)
+
+# Required package for quick package downloading and loading 
+if (!require(pacman))
+  install.packages("pacman")
+
+pacman::p_load(cluster, # K cluster analyses
+               dlookr, # Exploratory data analysis
+               formattable, # HTML tables from R outputs
+               ggfortify, # Plotting tools for stats
+               ggpubr, # Publishable ggplots
+               here, # Standardizes paths to data
+               kableExtra, # Alternative to formattable
+               knitr, # Needed to write HTML reports
+               missRanger, # To generate NAs
+               plotly, # Visualization package
+               rattle, # Decision tree visualization
+               rpart, # rpart algorithm
+               tidyverse, # Powerful data wrangling package suite
+               visdat) # Another EDA visualization package
+
+# Set global ggplot() theme
+# Theme pub_clean() from the ggpubr package with base text size = 16
+theme_set(theme_pubclean(base_size = 16)) 
+# All axes titles to their respective far right sides
+theme_update(axis.title = element_text(hjust = 1))
+# Remove axes ticks
+theme_update(axis.ticks = element_blank()) 
+# Remove legend key
+theme_update(legend.key = element_blank())
+
+
+```
+
+### LOADING AND DOWNLOADING THE DATASET:
+
+Here we will load the dataset which we are going to use for doing all our operations.
+
+```{r}
+# Let's load a data set from the diabetes data set
+demographics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-09-05/demographics.csv')
+demographics
+
+
+# What does the data look like?
+demographics |>
+  head() |>
+  formattable()
+```
+
+### DIAGNOSE YOUR DATA:
+
+The data set which we are using is being diagnosed here.
+
+```{r}
+# What are the properties of the data
+demographics |>
+  diagnose() |>
+  formattable()
+```
+
+### DIAGNOSE OUTLIERS:
+
+Here we will diagnose the outliers by plotting a box plot and histogram.
+
+```{r}
+# Table showing outliers
+demographics |>
+  diagnose_outlier() |>
+  filter(outliers_ratio > 0) |>  
+  mutate(rate = outliers_mean / with_mean) |>
+  arrange(desc(rate)) |> 
+  select(-outliers_cnt) |>
+  formattable()
+```
+
+```{r}
+# Boxplots and histograms of data with and without outliers
+demographics |>
+  select(find_outliers(demographics)) |>
+           plot_outlier()
+```
+
+## **Basic Exploration of Missing Values (NAs):**
+
+Table showing the extent of NAs in columns containing them
+
+```{r}
+# Randomly generate NAs for 30
+na.demographics <- demographics |>
+  generateNA(p = 0.3)
+
+# First six rows
+na.demographics |>
+  head() |>
+  formattable()
+```
+
+```{r}
+# Create the NA table
+na.demographics |>
+  plot_na_pareto(only_na = TRUE, plot = FALSE) |>
+  formattable() # Publishable table
+```
+
+-   Plots showing the frequency of missing values
+
+    ```{r}
+    # Plot the insersect of the columns with missing values
+    # This plot visualizes the table above
+    na.demographics |>
+      plot_na_pareto(only_na = TRUE)
+    ```
+
+## **Advanced Exploration of Missing Values (NAs):**
+
+Intersect plot that shows, for every combination of columns relevant, how many missing values are common
+
+Orange boxes are the columns in question
+
+x axis (top green bar plots) show the number of missing values in that column
+
+y axis (right green bars) show the number of missing values in the columns in orange blocks
+
+```{r}
+# Plot the intersect of the 5 columns with the most missing values
+# This means that some combinations of columns have missing values in the same row
+na.demographics |>
+  select(covered,employment,year) |>
+  plot_na_intersect(only_na = TRUE) 
+```
+
+### **Determining if NA Observations are the Same:**
+
+Missing values can be the same observation across several columns. The visdat package can solve this with the `vis_miss()` function which shows the rows with missing values through `ggplotly()`
+
+```{r}
+# Interactive plotly() plot of all NA values to examine every row
+#na.demographics |>
+ #select(covered, employment, year) |>
+ #vis_miss() |>
+ #ggplotly() 
+```
+
+### **Classifying Outliers:**
+
+Before imputing outliers, you will want to diagnose whether it's they are natural outliers or not. 
+
+```{r warning=FALSE}
+# Box plot
+demographics %>% # Set the simulated normal data as a data frame
+  ggplot(aes(x =year, y = facet, fill =facet)) + # Create a ggplot
+  geom_boxplot(width = 0.5, outlier.size = 2, outlier.alpha = 0.5) +
+  xlab("Year") +  # Relabel the x axis label
+  ylab("Covered") + # Remove the y axis label
+  theme(legend.position = "none")  # Remove the legend 
+```
+
+### Mean Imputation:
+
+The mean of the observed values for each variable is computed and the outliers for that variable are imputed by this mean
+
+```{r}
+# Raw summary, output suppressed
+mean_out_imp_p_covered <- demographics |>
+  select(p_covered) |>
+  imputate_outlier(p_covered, method = "mean")
+
+# Output showing the summary statistics of our imputation
+mean_out_imp_p_covered |>
+  summary() 
+```
+
+```{r}
+# Visualization of the mean imputation
+mean_out_imp_p_covered |>
+  plot()
+```
+
+### Median Imputation:
+
+The median of the observed values for each variable is computed and the outliers for that variable are imputed by this median
+
+```{r}
+# Raw summary, output suppressed
+med_out_imp_p_covered <- demographics |>
+  select(p_covered) |>
+  imputate_outlier(p_covered, method = "median")
+
+# Output showing the summary statistics of our imputation
+med_out_imp_p_covered |>
+  summary()
+```
+
+```{r}
+# Visualization of the median imputation
+med_out_imp_p_covered |>
+  plot()
+```
+
+### Mode Imputation:
+
+The mode of the observed values for each variable is computed and the outliers for that variable are imputed by this mode
+
+```{r}
+# Raw summary, output suppressed
+mode_out_imp_p_covered <- demographics |>
+  select(p_covered) |>
+  imputate_outlier(p_covered, method = "mode")
+
+# Output showing the summary statistics of our imputation
+mode_out_imp_p_covered |>
+  summary()
+```
+
+```{r}
+# Visualization of the mode imputation
+mode_out_imp_p_covered |>
+plot()
+```
+
+### **Capping Imputation (aka Winsorizing):**
+
+The Percentile Capping is a method of Imputing the outlier values by replacing those observations outside the lower limit with the value of 5th percentile and those that lie above the upper limit, with the value of 95th percentile of the same dataset.
+
+```{r}
+# Raw summary, output suppressed
+cap_out_imp_p_covered <- demographics |>
+  select(p_covered) |>
+  imputate_outlier(p_covered, method = "capping")
+
+# Output showing the summary statistics of our imputation
+cap_out_imp_p_covered |>
+  summary()
+```
+
+```{r}
+# Visualization of the capping imputation
+cap_out_imp_p_covered |>
+  plot()
+```
+
+## **Imputing NAs:**
+
+We can use the impute_na() method.
+
+### **K-Nearest Neighbor (KNN) Imputation:**
+
+KNN is a machine learning algorithm that classifies data by similarity. This in effect clusters data into similar groups. The algorithm predicts values of new data to replace NA values based on how closely they resembles training data points, such as by comparing across other columns.
+
+```{r}
+# KNN plot of our dataset without categories
+data_omit <- na.omit(demographics)
+demographicsAlt <- demographics
+demographicsAlt <- top_n(demographics,20,facet)
+autoplot(clara(data_omit[-5], 3))
+
+
+
+```
+
+```{r}
+#demographics.noNA
+```
+
+```{r}
+# Raw summary, output suppressed
+#demographicsnona <- demographics.noNA 
+#knn_na_imp_pa_covered <- demographicsnona|>
+# imputate_na(covered, method = "knn")
+
+# Plot showing the results of our imputation
+#knn_na_imp_pa_covered |>
+# plot()
+```
+
+#### There are no missing values in the dataset.
+
+### **Recursive Partitioning and Regression Trees (rpart):**
+
+rpart is a decision tree machine learning algorithm that builds classification or regression models through a two stage process, which can be thought of as binary trees. The algorithm splits the data into subsets, which move down other branches of the tree until a termination criteria is reached.
+
+```{r}
+library(magrittr)
+# Raw summary, output suppressed
+non_numeric <- demographics %>%
+  select_if(is.numeric)
+
+rpart_na_imp_p_covered <- non_numeric %>%
+  imputate_na(p_covered, method = "rpart")
+
+# Plot showing the results of our imputation
+rpart_na_imp_p_covered %>%
+  plot()
+```
+
+### **Multivariate Imputation by Chained Equations (MICE):**
+
+MICE is an algorithm that fills missing values multiple times, hence dealing with uncertainty better than other methods. This approach creates multiple copies of the data that can then be analyzed and then pooled into a single dataset
+
+```{r warning=FALSE}
+# Raw summary, output suppressed
+mice_na_imp_p_covered <- na.demographics |>
+  imputate_na(p_covered, method = "mice", seed = 123)
+```
+
+```{r}
+# Plot showing the results of our imputation
+mice_na_imp_p_covered |>
+  plot()
+```
